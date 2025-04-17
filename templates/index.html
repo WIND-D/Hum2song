@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taylor Swift Hum Challenge</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
+        }
+        .result-card {
+            transition: transform 0.3s ease;
+        }
+        .result-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-white mb-4">Taylor Swift Hum Challenge</h1>
+            <p class="text-xl text-white">Hum your favorite Taylor Swift song and see how well you match!</p>
+        </div>
+
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-xl p-8">
+            <div class="text-center mb-8">
+                <button id="startButton" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-4 px-8 rounded-full text-xl transition duration-300 ease-in-out transform hover:scale-105">
+                    Start Recording
+                </button>
+                <button id="stopButton" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-full text-xl transition duration-300 ease-in-out transform hover:scale-105 ml-4 hidden">
+                    Stop Recording
+                </button>
+                <p id="recordingStatus" class="mt-4 text-gray-600 hidden">Recording in progress...</p>
+            </div>
+
+            <div id="results" class="hidden">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Your Results</h2>
+                <div id="matchesList" class="space-y-4">
+                    <!-- Results will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const results = document.getElementById('results');
+        const matchesList = document.getElementById('matchesList');
+
+        startButton.addEventListener('click', async () => {
+            audioChunks = [];
+            startButton.disabled = true;
+            startButton.classList.add('opacity-50');
+            stopButton.classList.remove('hidden');
+            recordingStatus.classList.remove('hidden');
+            results.classList.add('hidden');
+            matchesList.innerHTML = '';
+
+            if (!navigator.mediaDevices) {
+                alert('Your browser does not support audio recording.');
+                return;
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start();
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    audioChunks.push(e.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+
+                startButton.disabled = false;
+                startButton.classList.remove('opacity-50');
+                stopButton.classList.add('hidden');
+                recordingStatus.classList.add('hidden');
+
+                try {
+                    const response = await fetch('/record', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+
+                    // Display results
+                    matchesList.innerHTML = '';
+                    data.matches.forEach(match => {
+                        const matchCard = document.createElement('div');
+                        matchCard.className = 'result-card bg-gray-50 p-6 rounded-lg shadow';
+                        matchCard.innerHTML = `
+                            <h3 class="text-xl font-bold text-gray-800">${match.title}</h3>
+                            <p class="text-gray-600">Album: ${match.album} (${match.year})</p>
+                            <div class="mt-4">
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div class="bg-pink-500 h-2.5 rounded-full" style="width: ${match.score}%"></div>
+                                </div>
+                                <div class="flex justify-between text-sm text-gray-600 mt-1">
+                                    <span>Match Score: ${match.score}%</span>
+                                    <span>Distance: ${match.distance.toFixed(4)}</span>
+                                </div>
+                                <p class="text-sm text-gray-500 mt-1">${match.quality}</p>
+                            </div>
+                        `;
+                        matchesList.appendChild(matchCard);
+                    });
+
+                    results.classList.remove('hidden');
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing your recording. Please try again.');
+                }
+            };
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        });
+    </script>
+</body>
+</html> 
